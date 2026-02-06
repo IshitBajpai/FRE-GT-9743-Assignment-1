@@ -95,93 +95,83 @@ class Interpolator1DPCP(Interpolator1D):
         assert self.extrap_method_ == ExtrapMethod.FLAT
 
     def interpolate(self, x: float) -> float:
-        ### TODO
-        if x<self.axis1_[0]:
-            return self.values_[0]
-        if x>self.axis1_[-1]:
-            return self.values_[-1]
-        
-        idx = np.searchsorted(self.axis1_, x, side='right')
+        axis = self.axis1_
+        values = self.values_
 
-        return self.values_[idx]
+        if x < axis[0]:
+            return values[0]
+        
+        elif x > axis[-1]:
+            return values[-1]
+        
+        insertion_index = np.searchsorted(axis, x, side="right")
+
+        return values[insertion_index]
     
     def gradient_wrt_ordinate(self, x : float):
-        ### TODO
-        gradient = np.zeros(self.length, dtype=float)
-        if x>= self.axis1_[-1]:
-            gradient[-1] = 1
-            return gradient
-        
-        if x< self.axis1_[0]:
-            gradient[0] = 1
-            return gradient
-        
-        idx = np.searchsorted(self.axis1_, x, side='right')
-        gradient[idx] = 1
-        return gradient
+        gradient_vector = np.zeros(self.length, dtype=float)
+        axis = self.axis1_
+
+        if x >= axis[-1]:
+            gradient_vector[-1] = 1.0
+            return gradient_vector
+
+        if x < axis[0]:
+            gradient_vector[0] = 1.0
+            return gradient_vector
+
+        #  x lies within interpolation range
+        insertion_index = np.searchsorted(axis, x, side="right")
+        gradient_vector[insertion_index] = 1.0
+        return gradient_vector
 
     def integrate(self, start_x : float, end_x : float):
-        ### TODO
-        if start_x > end_x:
-            start_x, end_x = end_x, start_x
+        left_value = self.interpolate(start_x)
+        right_value = self.interpolate(end_x)
 
-        if start_x == end_x:
-            return 0
-        
-        if self.length == 1:
-            return (end_x - start_x) * self.values_[0]
-        
-        left_ = self.interpolate(start_x)
-        right_ = self.interpolate(end_x)
-        
-        start_idx = np.searchsorted(self.axis1_, start_x, side='left')
-        if start_idx == self.length:
-            return (end_x - start_x)*left_
-        start_area = (self.axis1_[start_idx] - start_x)*left_
-        
-        end_idx = np.searchsorted(self.axis1_, end_x, side='right') - 1
-        if end_idx == -1:
-            return (end_x - start_x) * right_
-        
-        end_area = (end_x - self.axis1_[end_idx])  *right_
-        
-        area = start_area + end_area
+        left_index = np.searchsorted(self.axis1_, start_x, side="left")
+        right_index = np.searchsorted(self.axis1_, end_x, side="right") - 1
+    
+        if right_index == -1:
+            return (end_x - start_x) * right_value
+        if left_index == self.length_:
+            return (end_x - start_x) * left_value
 
-        for i in range (start_idx +1, end_idx+1):
-            area += (self.axis1_[i]  - self.axis1_[i-1])*self.values_[i]
-        
-        area = area
+        axis = self.axis1_
+        values = self.values_
+        total_area = ((axis[left_index] - start_x) * left_value + (end_x - axis[right_index]) * right_value)
 
-        return area
+        for i in range(left_index, right_index):
+            segment_width = axis[i + 1] - axis[i]
+            total_area += segment_width * values[i + 1]
+
+        return total_area
 
 
 
     def gradient_of_integrated_value_wrt_ordinate(self, start_x : float, end_x : float):
-        ### TODO
+        gradient_vector = np.zeros(self.length_)
+        axis = self.axis1_
 
-        if start_x > end_x:
-            start_x, end_x = end_x, start_x
-            
-        gradient = np.zeros(self.length_)
+        left_index = np.searchsorted(axis, start_x, side="left")
+        right_index = np.searchsorted(axis, end_x, side="right") - 1
 
-        start_idx = np.searchsorted(self.axis1_, start_x, side='left')
-        end_idx = np.searchsorted(self.axis1_, end_x, side='right') -1
+        if left_index == self.length_:
+            gradient_vector[-1] = end_x - start_x
+            return gradient_vector
 
-        if start_idx == self.length_:
-            gradient[-1] = end_x - start_x
-            return gradient
+        if right_index == -1:
+            gradient_vector[0] = end_x - start_x
+            return gradient_vector
+
+        gradient_vector[left_index] = axis[left_index] - start_x
         
-        if end_idx == -1:
-            gradient[0] = end_x - start_x
-            return gradient
-        
-        gradient[start_idx] = self.axis1_[start_idx] - start_x
-        
-        for i in range(start_idx+1, end_idx+1):
-            gradient[i] += self.axis1_[i] - self.axis1_[i-1]
+        for i in range(left_index + 1, right_index + 1):
+            gradient_vector[i] += axis[i] - axis[i - 1]
 
-        gradient[min(end_idx+1, self.length_-1)] += end_x - self.axis1_[end_idx]    
-        return gradient
+        tail_index = min(right_index + 1, self.length_ - 1)
+        gradient_vector[tail_index] += end_x - axis[right_index]
+        return gradient_vector
 
 class InterpolatorFactory:
 
